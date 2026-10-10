@@ -1071,6 +1071,27 @@ class TestRunsApprovalBridge:
         assert len(events) == 1
         assert result["approved"] is True
 
+    def test_execute_code_times_out_to_deny(self, monkeypatch):
+        monkeypatch.setattr(
+            approval_context, "_get_approval_config",
+            lambda: {"mode": "manual", "timeout": 0.05},
+        )
+        events = []
+        approval_module.register_gateway_notify(self.SESSION_KEY, events.append)
+        result = approval_module.check_execute_code_guard("import os", "local")
+        assert len(events) == 1
+        assert result["approved"] is False
+        assert "timed out" in result["message"]
+
+    def test_webhook_with_notifier_still_denies(self, monkeypatch):
+        """webhook turns register a notifier but no client can answer it."""
+        monkeypatch.setenv("HERMES_SESSION_PLATFORM", "webhook")
+        events = self._answer_with("once")
+        result = approval_module.check_execute_code_guard("import os", "local")
+        assert events == []
+        assert result["approved"] is False
+        assert "approvals.unattended_mode" in result["message"]
+
     def test_cron_with_notifier_still_denies(self, monkeypatch):
         monkeypatch.setenv("HERMES_CRON_SESSION", "1")
         events = self._answer_with("once")
